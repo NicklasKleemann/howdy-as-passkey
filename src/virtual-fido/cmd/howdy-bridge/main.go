@@ -28,15 +28,22 @@ func main() {
 	pamService := flag.String("pam-service", "howdy-only", "PAM service that runs the Howdy face-only stack")
 	unixUser := flag.String("user", defaultUser, "unix user whose Howdy face is enrolled")
 	vaultPath := flag.String("vault", defaultVault, "path to the encrypted credential vault")
-	passphrase := flag.String("passphrase", "", "vault passphrase (REQUIRED until TPM sealing lands)")
+	passphrase := flag.String("passphrase", "", "vault passphrase; prefer the HOWDY_BRIDGE_PASSPHRASE env var so it is not visible in the process list (REQUIRED until TPM sealing lands)")
 	verbose := flag.Bool("verbose", false, "trace-level logging")
 	flag.Parse()
+
+	// Prefer the env var (systemd EnvironmentFile, mode 0600) over the flag so
+	// the secret never appears in `ps`/shell history. Flag stays for ad-hoc use.
+	pass := *passphrase
+	if pass == "" {
+		pass = os.Getenv("HOWDY_BRIDGE_PASSPHRASE")
+	}
 
 	if *unixUser == "" {
 		fail("could not determine unix user; pass --user")
 	}
-	if *passphrase == "" {
-		fail("--passphrase is required (the vault is encrypted at rest; TPM sealing will replace this)")
+	if pass == "" {
+		fail("no passphrase: set HOWDY_BRIDGE_PASSPHRASE or pass --passphrase (the vault is encrypted at rest; TPM sealing will replace this)")
 	}
 
 	virtual_fido.SetLogOutput(os.Stderr)
@@ -54,7 +61,7 @@ func main() {
 		pamService: *pamService,
 		user:       *unixUser,
 		vaultPath:  *vaultPath,
-		passphrase: *passphrase,
+		passphrase: pass,
 	}
 
 	// Ephemeral self-signed attestation CA, regenerated each run. Fine for a
@@ -66,7 +73,7 @@ func main() {
 
 	// The vault-at-rest key. Derived from the passphrase for now; a later step
 	// seals this to the TPM so the vault only decrypts with chip + face.
-	encryptionKey := sha256.Sum256([]byte(*passphrase))
+	encryptionKey := sha256.Sum256([]byte(pass))
 
 	fidoClient := fido_client.NewDefaultClient(ca, caPrivateKey, encryptionKey, false, client, client)
 

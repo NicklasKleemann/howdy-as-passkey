@@ -1,0 +1,25 @@
+# systemd user service for howdy-passkey-bridge.
+# Install: see scripts/install-service.sh (copies this to
+# ~/.config/systemd/user/, then `systemctl --user enable --now`).
+#
+# Runs as your user — no root. Needs the 'usbip' group active in the session
+# (log out/in once after setup-env.sh), and vhci-hcd loaded at boot.
+
+[Unit]
+Description=Howdy passkey bridge (virtual FIDO2 authenticator gated on Howdy face auth)
+Documentation=https://github.com/NicklasKleemann/howdy-passkey-bridge
+After=graphical-session.target
+
+[Service]
+Type=simple
+# Passphrase comes from an EnvironmentFile (mode 0600), never the command line.
+EnvironmentFile=%h/.config/howdy-passkey-bridge/passphrase.env
+ExecStart=%h/.local/bin/howdy-bridge --vault %h/.config/howdy-passkey-bridge/vault.json
+Restart=on-failure
+RestartSec=2
+# Safe hardening only. Aggressive sandboxing (ProtectSystem/ProtectHome) is
+# deferred — it risks blocking the camera, /etc/howdy, or the vhci sysfs write.
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target
