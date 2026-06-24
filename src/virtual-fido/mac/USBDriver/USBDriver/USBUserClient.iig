@@ -1,0 +1,44 @@
+//
+//  USBUserClient.iig
+//  USBDriver
+//
+//  Created by Chris de la Iglesia on 12/31/22.
+//
+
+#ifndef USBUserClient_h
+#define USBUserClient_h
+
+#include <Availability.h>
+#include <DriverKit/IOUserClient.iig>
+#include <DriverKit/IOBufferMemoryDescriptor.h>
+#include <HIDDriverKit/IOHIDDeviceTypes.h>
+
+class USBUserClient: IOUserClient {
+public:
+    virtual bool init(void) override;
+    virtual void free(void) override;
+    virtual kern_return_t Stop(IOService *provider) override;
+    virtual kern_return_t ExternalMethod(uint64_t selector, IOUserClientMethodArguments* arguments, const IOUserClientMethodDispatch* dispatch, OSObject* target, void* reference) override;
+    
+    void newHIDFrame(IOMemoryDescriptor *report, IOHIDReportType reportType) LOCALONLY;
+    
+protected:
+    void clearDeviceIfNecessary() LOCALONLY;
+    
+    static kern_return_t StaticHandleStartDevice(USBUserClient* target, void* reference, IOUserClientMethodArguments* arguments) LOCALONLY;
+    kern_return_t HandleStartDevice(void* reference, IOUserClientMethodArguments* arguments) LOCALONLY;
+    
+    static kern_return_t StaticHandleStopDevice(USBUserClient* target, void* reference, IOUserClientMethodArguments* arguments) LOCALONLY;
+    kern_return_t HandleStopDevice(void* reference, IOUserClientMethodArguments* arguments) LOCALONLY;
+    
+    static kern_return_t StaticHandleSendFrame(USBUserClient* target, void* reference, IOUserClientMethodArguments* arguments) LOCALONLY;
+    kern_return_t HandleSendFrame(void* reference, IOUserClientMethodArguments* arguments) LOCALONLY;
+    
+    static kern_return_t StaticHandleNotifyFrame(USBUserClient* target, void* reference, IOUserClientMethodArguments* arguments) LOCALONLY;
+    kern_return_t HandleNotifyFrame(void* reference, IOUserClientMethodArguments* arguments) LOCALONLY;
+    
+    static kern_return_t StaticHandleGetFrame(USBUserClient* target, void* reference, IOUserClientMethodArguments* arguments) LOCALONLY;
+    kern_return_t HandleGetFrame(void* reference, IOUserClientMethodArguments* arguments) LOCALONLY;
+};
+
+#endif /* USBUserClient_h */

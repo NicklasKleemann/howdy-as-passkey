@@ -1,0 +1,18 @@
+# Go — project-local toolchain state (see scripts/env.sh)
+/.go/
+/bin/
+*.test
+*.out
+
+# Python — project-local venv (uv)
+/.venv/
+
+# secrets / local key material — never commit
+*.key
+*.pem
+vault/
+*.sealed
+
+# editor
+.idea/
+.vscode/
