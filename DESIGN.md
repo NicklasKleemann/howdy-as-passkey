@@ -172,8 +172,12 @@ Wiring: `fido_client.NewDefaultClient(... approver, saver)` → `virtual_fido.St
    key present means TPM mode, else the disk passphrase. `--tpm-init` migrates an
    existing vault (verify-decrypt, back up, seal+verify-unseal, re-encrypt
    atomically). Needs the `tss` group for `/dev/tpmrm0`. Round-trip + corruption
-   test in `tpm_linux_test.go`. Still TODO: in-chip signing (refactor cose/crypto
-   to `crypto.Signer`) so private keys never leave the chip; PCR-bound policy.
+   test in `tpm_linux_test.go`.
+   In-chip signing: DONE (phase 2). Credential keys are generated in the TPM and
+   signed in-chip (`tpmecdsa_linux.go`); `cose.SupportedCOSEPrivateKey` has a TPM
+   variant with `cose.TPMSign`, `identities.NewIdentity` uses `identities.TPMNewKey`,
+   the bridge wires both in TPM mode. Clean break from software-key vaults.
+   Still TODO: PCR-bound sealing policy; TPM-backed attestation CA.
 8. systemd user service: DONE. Remaining: attestation none/self option, harden
    the usbip EOF panic + other panic sites, cherry-pick upstream security PRs,
    assign own AAGUID, then a wider publish.
