@@ -2,13 +2,20 @@ package identities
 
 import (
 	"bytes"
+	"crypto/ecdsa"
 	"crypto/x509"
 	"fmt"
+	"os"
 
 	"github.com/bulwarkid/virtual-fido/cose"
 	"github.com/bulwarkid/virtual-fido/crypto"
 	"github.com/bulwarkid/virtual-fido/webauthn"
 )
+
+// TPMNewKey is installed by the host (the bridge) to generate a credential key
+// inside the TPM, returning the sealed blob and the public key. When set, new
+// credentials are TPM-backed; when nil, a software ECDSA key is used.
+var TPMNewKey func() (blob []byte, pub *ecdsa.PublicKey, err error)
 
 type CredentialSource struct {
 	Type             string
@@ -38,8 +45,17 @@ func NewIdentityVault() *IdentityVault {
 
 func (vault *IdentityVault) NewIdentity(relyingParty *webauthn.PublicKeyCredentialRPEntity, user *webauthn.PublicKeyCrendentialUserEntity) *CredentialSource {
 	credentialID := crypto.RandomBytes(16)
-	privateKey := crypto.GenerateECDSAKey()
-	cosePrivateKey := &cose.SupportedCOSEPrivateKey{ECDSA: privateKey}
+	var cosePrivateKey *cose.SupportedCOSEPrivateKey
+	if TPMNewKey != nil {
+		blob, pub, err := TPMNewKey()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "[identities] TPM key generation failed: %s\n", err)
+			return nil
+		}
+		cosePrivateKey = &cose.SupportedCOSEPrivateKey{TPM: &cose.TPMKey{Blob: blob, Public: pub}}
+	} else {
+		cosePrivateKey = &cose.SupportedCOSEPrivateKey{ECDSA: crypto.GenerateECDSAKey()}
+	}
 	credentialSource := CredentialSource{
 		Type:             "public-key",
 		ID:               credentialID,

@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 
 	virtual_fido "github.com/bulwarkid/virtual-fido"
+	"github.com/bulwarkid/virtual-fido/cose"
 	"github.com/bulwarkid/virtual-fido/fido_client"
 	"github.com/bulwarkid/virtual-fido/identities"
 	"github.com/bulwarkid/virtual-fido/util"
@@ -65,6 +66,13 @@ func main() {
 	vaultPass, mode, err := resolveVaultPassphrase(pass)
 	if err != nil {
 		fail(err.Error())
+	}
+
+	// In TPM mode, credential keys are also generated and signed in-chip: the
+	// private key never leaves the TPM. In disk mode keys stay software-backed.
+	if mode == "tpm" {
+		cose.TPMSign = tpmECDSASign
+		identities.TPMNewKey = tpmCreateECDSAKey
 	}
 
 	virtual_fido.SetLogOutput(os.Stderr)

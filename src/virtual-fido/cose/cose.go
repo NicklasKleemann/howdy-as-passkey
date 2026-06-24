@@ -1,18 +1,33 @@
 package cose
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"crypto/ed25519"
 	"crypto/elliptic"
 	"crypto/rsa"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"math/big"
+	"os"
 
 	"github.com/bulwarkid/virtual-fido/crypto"
 	"github.com/bulwarkid/virtual-fido/util"
 	"github.com/fxamacker/cbor/v2"
 )
+
+// TPMKey is an ECDSA P-256 key whose private half stays inside the TPM. Blob is
+// the sealed (public+private) TPM object; Public is the extracted public key.
+type TPMKey struct {
+	Blob   []byte
+	Public *ecdsa.PublicKey
+}
+
+// TPMSign is installed by the host (the bridge) to sign a SHA-256 digest with a
+// TPM-resident key, returning an ASN.1 DER ECDSA signature. Nil when TPM-backed
+// keys are not in use.
+var TPMSign func(blob, digest []byte) ([]byte, error)
 
 type COSEAlgorithmID int32
 
@@ -44,9 +59,16 @@ type SupportedCOSEPrivateKey struct {
 	ECDSA   *ecdsa.PrivateKey
 	Ed25519 *ed25519.PrivateKey
 	RSA     *rsa.PrivateKey
+	TPM     *TPMKey
 }
 
 func (key *SupportedCOSEPrivateKey) Equal(otherKey *SupportedCOSEPrivateKey) bool {
+	if (key.TPM == nil) != (otherKey.TPM == nil) {
+		return false
+	}
+	if key.TPM != nil && !bytes.Equal(key.TPM.Blob, otherKey.TPM.Blob) {
+		return false
+	}
 	if (key.ECDSA == nil) != (otherKey.ECDSA == nil) {
 		// One is non-nil and the other is nil
 		return false
@@ -72,6 +94,10 @@ func (key *SupportedCOSEPrivateKey) Equal(otherKey *SupportedCOSEPrivateKey) boo
 
 func (key *SupportedCOSEPrivateKey) Public() *SupportedCOSEPublicKey {
 	coseKey := SupportedCOSEPublicKey{}
+	if key.TPM != nil {
+		coseKey.ECDSA = key.TPM.Public
+		return &coseKey
+	}
 	if key.ECDSA != nil {
 		coseKey.ECDSA = &key.ECDSA.PublicKey
 	} else if key.Ed25519 != nil {
@@ -86,6 +112,19 @@ func (key *SupportedCOSEPrivateKey) Public() *SupportedCOSEPublicKey {
 }
 
 func (key *SupportedCOSEPrivateKey) Sign(data []byte) []byte {
+	if key.TPM != nil {
+		if TPMSign == nil {
+			fmt.Fprintln(os.Stderr, "[cose] TPM-backed key but no TPM signer configured")
+			return nil
+		}
+		digest := sha256.Sum256(data)
+		sig, err := TPMSign(key.TPM.Blob, digest[:])
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "[cose] TPM sign failed: %s\n", err)
+			return nil
+		}
+		return sig
+	}
 	if key.ECDSA != nil {
 		return crypto.SignECDSA(key.ECDSA, data)
 	} else if key.Ed25519 != nil {
@@ -387,8 +426,33 @@ func UnmarshalCOSEPublicKey(publicKeyBytes []byte) (*SupportedCOSEPublicKey, err
 	}
 }
 
+// coseTPMKey serializes a TPM-backed P-256 key: the public point plus the
+// sealed TPM blob (no private scalar exists outside the chip). The presence of
+// TPMBlob is what marks a stored key as TPM-backed.
+type coseTPMKey struct {
+	KeyType   int8   `cbor:"1,keyasint"`
+	Algorithm int8   `cbor:"3,keyasint"`
+	Curve     int8   `cbor:"-1,keyasint"`
+	X         []byte `cbor:"-2,keyasint"`
+	Y         []byte `cbor:"-3,keyasint"`
+	TPMBlob   []byte `cbor:"-100,keyasint"`
+}
+
+func encodeTPMPrivateKey(k *TPMKey) []byte {
+	return util.MarshalCBOR(coseTPMKey{
+		KeyType:   int8(COSE_KEY_TYPE_EC2),
+		Algorithm: int8(COSE_ALGORITHM_ID_ES256),
+		Curve:     int8(COSE_CURVE_ID_P256),
+		X:         k.Public.X.Bytes(),
+		Y:         k.Public.Y.Bytes(),
+		TPMBlob:   k.Blob,
+	})
+}
+
 func MarshalCOSEPrivateKey(privateKey *SupportedCOSEPrivateKey) []byte {
-	if privateKey.ECDSA != nil {
+	if privateKey.TPM != nil {
+		return encodeTPMPrivateKey(privateKey.TPM)
+	} else if privateKey.ECDSA != nil {
 		return encodeECDSAPrivateKey(privateKey.ECDSA)
 	} else if privateKey.Ed25519 != nil {
 		return encodeEd215519PrivateKey(privateKey.Ed25519)
@@ -400,6 +464,17 @@ func MarshalCOSEPrivateKey(privateKey *SupportedCOSEPrivateKey) []byte {
 }
 
 func UnmarshalCOSEPrivateKey(privateKeyBytes []byte) (*SupportedCOSEPrivateKey, error) {
+	// A stored TPM key carries a sealed blob and no private scalar; detect it first.
+	probe := coseTPMKey{}
+	if err := cbor.Unmarshal(privateKeyBytes, &probe); err == nil && len(probe.TPMBlob) > 0 {
+		pub := &ecdsa.PublicKey{
+			Curve: elliptic.P256(),
+			X:     new(big.Int).SetBytes(probe.X),
+			Y:     new(big.Int).SetBytes(probe.Y),
+		}
+		return &SupportedCOSEPrivateKey{TPM: &TPMKey{Blob: probe.TPMBlob, Public: pub}}, nil
+	}
+
 	header := COSEKeyHeader{}
 	err := cbor.Unmarshal(privateKeyBytes, &header)
 	if err != nil {
