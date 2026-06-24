@@ -39,8 +39,21 @@ personal use.
 
 - **UV honesty:** when the daemon asserts user-verification to a relying party,
   that assertion must reflect a real, current Howdy match. No caching a "yes".
-- **Least privilege:** daemon runs as the user. The PAM helper gets only what it
-  needs for camera/model access (scoped setuid or a tight polkit action).
+  Each ceremony runs `pamtester howdy-only <user> authenticate` and fails closed
+  on any non-success (non-zero exit, timeout, missing binary).
+- **Least privilege — the daemon runs fully unprivileged, no sudo.** Howdy auth
+  works as the user (member of `video`). The one operation that would need root,
+  writing the vhci `attach`/`detach` sysfs controls, is granted to a dedicated
+  `usbip` group via a udev rule (`scripts/70-howdy-passkey-vhci.rules`); the user
+  joins that group. There is no sudoers entry.
+  - Residual risk: members of the `usbip` group can attach/detach USB/IP devices
+    (e.g. a rogue HID). Keep the group limited to the human user(s) who run the
+    bridge. This is strictly better than the rejected alternative — a NOPASSWD
+    sudo rule for `usbip attach *`, whose wildcard let any local code attach an
+    arbitrary remote device as root (a privilege-escalation path).
+- **Robustness:** unknown/empty CTAP commands return a spec error, never panic —
+  a single malformed frame from any process on the USB bus must not crash the
+  authenticator. (Upstream panicked; see the fork's ctap.go hardening.)
 - **Glasses caveat:** Howdy enrollment is appearance-sensitive. Keep both
   glasses / no-glasses samples enrolled to avoid lockouts.
 

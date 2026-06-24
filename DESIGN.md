@@ -69,14 +69,25 @@ selection. Minor.
 
 ### Howdy hook
 
-Reuse the existing PAM service `/etc/pam.d/howdy-only` (face-only stack, already
-present on the target machine for the presence daemon). A small PAM helper
-authenticates against it; exit 0 = face matched → set the UV flag → proceed to
-sign.
+The approver (`cmd/howdy-bridge/approver.go`) gates every ceremony by running
+`pamtester howdy-only <user> authenticate` against the face-only PAM service
+`/etc/pam.d/howdy-only`. Exit 0 = face matched → approve (and set UV); anything
+else → deny.
 
-- Use the PAM route, **not** Howdy's internal `compare.py` — inherits Howdy's
-  full config (timeout, certainty, dark threshold, retries).
-- **Fail closed:** any Howdy error or timeout → deny. Never default-allow.
+- Use the PAM route (via pamtester), **not** Howdy's internal compare — inherits
+  Howdy's full config (timeout, certainty, dark threshold, retries).
+- **Fail closed:** non-zero exit, missing binary, or a 30s backstop timeout all
+  return false. Never default-allow.
+- Runs as the unprivileged user (member of `video`); no root needed for the face
+  check.
+
+### Privilege model — no sudo
+
+The daemon runs fully unprivileged. The only root-needing operation, writing the
+vhci `attach`/`detach` sysfs controls, is delegated to a `usbip` group via
+`scripts/70-howdy-passkey-vhci.rules`; the installer adds the user to that group.
+No sudoers entry. (An earlier NOPASSWD-sudo approach was rejected: its
+`usbip attach *` wildcard was a privilege-escalation path.)
 
 ### Key storage
 
@@ -145,12 +156,16 @@ Wiring: `fido_client.NewDefaultClient(... approver, saver)` → `virtual_fido.St
    (`lsusb` → "No Company Virtual FIDO", hidraw created), Howdy auths the attach.
    Known-good before any edit. NOTE: the demo's stdin y/n approver panics under
    nohup (no tty) — our HowdyApprover removes that dependency (step 4).
-4. **UV fix** (the blocker): set `authDataFlagUserVerified` on a verified
-   approval in ctap.go. Implement `HowdyApprover` (ClientRequestApprover) calling
-   the `howdy-only` PAM helper, fail-closed.
-5. First `navigator.credentials.create()` + `.get()` with `uv=1` against a test
-   page (webauthn.io).
-6. Security patches: cherry-pick PRs #51/#52/#53/#54; harden panic sites.
+4. ✅ **UV fix** (the blocker): set `authDataFlagUserVerified` on a verified
+   approval in ctap.go (both ceremonies) + advertise `uv` in GetInfo. Implemented
+   `cmd/howdy-bridge` with a `pamtester`-based approver (fail-closed) and a
+   file-backed vault. Runs with no sudo (usbip group + udev rule).
+   Verified 2026-06-24 via libfido2: `fido2-cred -M -v` → authData flags `0x45`
+   (UP+UV+AT), `fido2-cred -V` (uv required) passes. Live Howdy gated the create.
+5. Browser end-to-end: `navigator.credentials.create()` + `.get()` with `uv=1`
+   on webauthn.io (USER to eyeball in Chrome — the headless libfido2 path is green).
+6. Security patches: cherry-pick PRs #51/#52/#53/#54; harden remaining panic
+   sites. (Done so far: HandleMessage no longer panics on empty/unknown commands.)
 7. TPM: seal-at-rest via `ClientDataSaver.Passphrase()` first; then refactor
    cose/crypto to `crypto.Signer` for in-chip signing.
 8. systemd user service, attestation none/self option, docs, publish.

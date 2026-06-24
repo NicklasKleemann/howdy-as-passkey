@@ -1,0 +1,15 @@
+# howdy-passkey-bridge: let the "usbip" group attach the virtual authenticator
+# without root.
+#
+# The USB/IP virtual host controller (vhci_hcd) exposes write-only control
+# files `attach` and `detach` that are root-only by default. usbip needs to
+# write `attach` to bind the bridge's virtual FIDO device. Rather than grant
+# the bridge sudo, we hand the "usbip" group write access to just those two
+# controls. Membership is user-specific and set by the installer; this rule
+# names only the group, so it is identical on every machine.
+#
+# Note: members of the "usbip" group can attach/detach USB/IP devices. Keep the
+# group membership limited to the human user(s) who run the bridge.
+
+ACTION=="add|change", SUBSYSTEM=="platform", KERNEL=="vhci_hcd.0", \
+  RUN+="/bin/sh -c 'chgrp usbip /sys$env{DEVPATH}/attach /sys$env{DEVPATH}/detach && chmod 0660 /sys$env{DEVPATH}/attach /sys$env{DEVPATH}/detach'"

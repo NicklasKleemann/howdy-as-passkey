@@ -98,6 +98,12 @@ func NewCTAPServer(client CTAPClient) *CTAPServer {
 }
 
 func (server *CTAPServer) HandleMessage(data []byte) []byte {
+	// FORK: a CTAP message must have at least a command byte. An empty frame
+	// from any client must not index data[0] and crash the authenticator.
+	if len(data) == 0 {
+		ctapLogger.Printf("CTAP ERROR: empty message\n\n")
+		return []byte{byte(ctap1ErrInvalidLength)}
+	}
 	command := ctapCommand(data[0])
 	ctapLogger.Printf("CTAP COMMAND: %s\n\n", ctapCommandDescriptions[command])
 	switch command {
@@ -110,7 +116,11 @@ func (server *CTAPServer) HandleMessage(data []byte) []byte {
 	case ctapCommandClientPIN:
 		return server.handleClientPIN(data[1:])
 	default:
-		panic(fmt.Sprintf("Invalid CTAP Command: %d", command))
+		// FORK: unknown/unsupported command (e.g. Reset, GetNextAssertion, or a
+		// client probe like 0x40). Return the spec error instead of panicking —
+		// a single unrecognized frame must never take down the authenticator.
+		ctapLogger.Printf("CTAP ERROR: unsupported command 0x%02x\n\n", uint8(command))
+		return []byte{byte(ctap1ErrInvalidCommand)}
 	}
 }
 
@@ -236,7 +246,11 @@ func (server *CTAPServer) handleMakeCredential(data []byte) []byte {
 		ctapLogger.Printf("ERROR: Unapproved action (Create account)")
 		return []byte{byte(ctap2ErrOperationDenied)}
 	}
-	flags = flags | authDataFlagUserPresent
+	// FORK: approval here is a successful Howdy face match — a biometric, i.e.
+	// genuine user verification, not mere presence. Set UV as well as UP so
+	// passkey/passwordless relying parties that require uv=1 accept the
+	// credential. (Upstream set only UP, gating UV behind CTAP PIN auth.)
+	flags = flags | authDataFlagUserPresent | authDataFlagUserVerified
 
 	credentialSource := server.client.NewCredentialSource(args.PubKeyCredParams, args.ExcludeList, args.RP, args.User)
 	if credentialSource == nil {
@@ -268,7 +282,9 @@ type getInfoOptions struct {
 	CanResidentKey  bool  `cbor:"rk"`
 	HasClientPIN    *bool `cbor:"clientPin,omitempty"`
 	CanUserPresence bool  `cbor:"up"`
-	// CanUserVerification bool  `cbor:"uv"`
+	// FORK: advertise built-in user verification (Howdy). Present+true tells the
+	// platform a configured UV method exists, so it won't force a PIN.
+	CanUserVerification bool `cbor:"uv,omitempty"`
 }
 
 type getInfoResponse struct {
@@ -285,10 +301,10 @@ func (server *CTAPServer) handleGetInfo() []byte {
 		Versions: []string{"FIDO_2_0", "U2F_V2"},
 		AAGUID:   aaguid,
 		Options: getInfoOptions{
-			IsPlatform:      false,
-			CanResidentKey:  server.client.SupportsResidentKey(),
-			CanUserPresence: true,
-			// CanUserVerification: true,
+			IsPlatform:          false,
+			CanResidentKey:      server.client.SupportsResidentKey(),
+			CanUserPresence:     true,
+			CanUserVerification: true, // FORK: Howdy is our configured UV method
 		},
 	}
 	if server.client.SupportsPIN() {
@@ -357,7 +373,9 @@ func (server *CTAPServer) handleGetAssertion(data []byte) []byte {
 			ctapLogger.Printf("ERROR: Unapproved action (Account login)")
 			return []byte{byte(ctap2ErrOperationDenied)}
 		}
-		flags = flags | authDataFlagUserPresent
+		// FORK: Howdy face match performed here = user verification. Set UV with
+		// UP so relying parties requiring uv=1 accept the assertion.
+		flags = flags | authDataFlagUserPresent | authDataFlagUserVerified
 	}
 
 	authData := makeAuthData(args.RPID, credentialSource, nil, flags)
