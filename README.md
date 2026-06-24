@@ -23,13 +23,25 @@ The browser runs a normal WebAuthn ceremony and sees a standard USB security key
 ## Quickstart (Arch / CachyOS)
 
 ```sh
+git clone https://github.com/NicklasKleemann/howdy-passkey-bridge
+cd howdy-passkey-bridge
+
 ./scripts/setup-env.sh        # deps, howdy-only PAM stack, usbip group + udev rule, vhci module
 ./scripts/install-service.sh  # build, install to ~/.local/bin, set up the systemd user service
+                              # (prompts for a vault passphrase — remember it; it encrypts your keys)
 # log out and back in once (activates the 'usbip' group), then:
 systemctl --user start howdy-passkey-bridge.service
 ```
 
 Then register a passkey on any site. In the browser dialog pick the **security key / USB** option (we present over USB transport) — Howdy prompts for your face. The service autostarts on every login thereafter.
+
+Manage it:
+
+```sh
+systemctl --user status howdy-passkey-bridge      # is it running?
+journalctl --user -u howdy-passkey-bridge -f      # live logs (CTAP traffic, Howdy prompts)
+systemctl --user stop howdy-passkey-bridge        # stop
+```
 
 Other distros: install the equivalents of the packages listed in `scripts/setup-env.sh` (it is written for Arch/pacman).
 
