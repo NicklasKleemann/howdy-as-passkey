@@ -75,9 +75,19 @@ It attaches the authenticator, drives a real `makeCredential` with libfido2, ass
 
 Read [docs/security.md](docs/security.md) before trusting this with real accounts. In short: it is built for personal use on a machine with an IR depth camera. It runs unprivileged (no sudo), and the only security gate is the Howdy face check, which fails closed. On a machine with a TPM the vault key is sealed to it, so the vault cannot be decrypted on another machine; without a TPM the vault is passphrase-encrypted on disk. Clearing or replacing the TPM loses the vault, so keep the pre-TPM backup the migration writes (`vault.json.pre-tpm.bak`). It is **not hardware attested and not security reviewed.** Keep a second 2FA method on any account you add it to.
 
+## What the fork changes
+
+This forks `bulwarkid/virtual-fido` and patches it for Howdy-gated, TPM-backed passkeys:
+
+- **User verification:** sets the WebAuthn UV flag when a ceremony is approved by a Howdy face match (upstream set it only under CTAP PIN auth), and advertises `uv` in GetInfo. Relying parties that require `uv=1` now accept the credential.
+- **Platform authenticator:** presents as a platform authenticator so browsers route the passkey path to it.
+- **TPM:** the vault key is sealed to the TPM, and on a TPM machine credential keys are generated and signed inside the chip, so the private key never leaves it. Without a TPM the keys stay software-backed and the vault uses passphrase encryption.
+- **Robustness:** returns CTAP spec errors instead of panicking on empty or unknown commands.
+- **Unprivileged:** runs with no sudo. A `usbip` group plus a udev rule grant the vhci attach, and the `tss` group grants TPM access.
+
 ## Built on
 
-- [bulwarkid/virtual-fido](https://github.com/bulwarkid/virtual-fido), the CTAP2/U2F and USB/IP authenticator this forks and patches (MIT; license preserved at `src/virtual-fido/LICENSE`). See [DESIGN.md](DESIGN.md) for what the fork changes and why.
+- [bulwarkid/virtual-fido](https://github.com/bulwarkid/virtual-fido), the CTAP2/U2F and USB/IP authenticator this forks and patches (MIT; license preserved at `src/virtual-fido/LICENSE`). See [What the fork changes](#what-the-fork-changes).
 - [Howdy](https://github.com/boltgolt/howdy), the face-recognition PAM module that provides user verification.
 
 ## License
