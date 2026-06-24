@@ -2,6 +2,11 @@
 // user-verification step is a live Howdy face match. To the browser it looks
 // like an ordinary roaming security key; every create/get ceremony requires
 // your face.
+//
+// The vault that holds passkey private keys is encrypted at rest. The key is
+// auto-detected: if a TPM-sealed key exists it is unsealed from this machine's
+// TPM, otherwise a passphrase (env/flag) is used for plain disk encryption.
+// Run once with --tpm-init to set up (and migrate to) TPM sealing.
 package main
 
 import (
@@ -28,22 +33,38 @@ func main() {
 	pamService := flag.String("pam-service", "howdy-only", "PAM service that runs the Howdy face-only stack")
 	unixUser := flag.String("user", defaultUser, "unix user whose Howdy face is enrolled")
 	vaultPath := flag.String("vault", defaultVault, "path to the encrypted credential vault")
-	passphrase := flag.String("passphrase", "", "vault passphrase; prefer the HOWDY_BRIDGE_PASSPHRASE env var so it is not visible in the process list (REQUIRED until TPM sealing lands)")
+	passphrase := flag.String("passphrase", "", "vault passphrase; prefer the HOWDY_BRIDGE_PASSPHRASE env var so it is not visible in the process list. Ignored once TPM sealing is set up.")
+	tpmInit := flag.Bool("tpm-init", false, "set up TPM sealing: generate a strong key, seal it to this machine's TPM, and migrate the existing vault to it (pass the current --passphrase to migrate)")
 	verbose := flag.Bool("verbose", false, "trace-level logging")
 	flag.Parse()
 
-	// Prefer the env var (systemd EnvironmentFile, mode 0600) over the flag so
-	// the secret never appears in `ps`/shell history. Flag stays for ad-hoc use.
+	// env var beats the flag so the secret stays out of `ps` / shell history.
 	pass := *passphrase
 	if pass == "" {
 		pass = os.Getenv("HOWDY_BRIDGE_PASSPHRASE")
 	}
 
+	if err := os.MkdirAll(filepath.Dir(*vaultPath), 0o700); err != nil {
+		fail(fmt.Sprintf("could not create vault dir: %s", err))
+	}
+
+	if *tpmInit {
+		if err := runTPMInit(*vaultPath, pass); err != nil {
+			fail(fmt.Sprintf("tpm-init: %s", err))
+		}
+		fmt.Fprintf(os.Stderr, "[tpm-init] done. The vault is now sealed to this machine's TPM.\n")
+		fmt.Fprintf(os.Stderr, "[tpm-init] You can delete any HOWDY_BRIDGE_PASSPHRASE / passphrase.env now.\n")
+		return
+	}
+
 	if *unixUser == "" {
 		fail("could not determine unix user; pass --user")
 	}
-	if pass == "" {
-		fail("no passphrase: set HOWDY_BRIDGE_PASSPHRASE or pass --passphrase (the vault is encrypted at rest; TPM sealing will replace this)")
+
+	// Auto-detect: TPM-sealed key if present, else the passphrase for disk mode.
+	vaultPass, mode, err := resolveVaultPassphrase(pass)
+	if err != nil {
+		fail(err.Error())
 	}
 
 	virtual_fido.SetLogOutput(os.Stderr)
@@ -53,15 +74,11 @@ func main() {
 		virtual_fido.SetLogLevel(util.LogLevelDebug)
 	}
 
-	if err := os.MkdirAll(filepath.Dir(*vaultPath), 0o700); err != nil {
-		fail(fmt.Sprintf("could not create vault dir: %s", err))
-	}
-
 	client := &HowdyClient{
 		pamService: *pamService,
 		user:       *unixUser,
 		vaultPath:  *vaultPath,
-		passphrase: pass,
+		passphrase: vaultPass,
 	}
 
 	// Ephemeral self-signed attestation CA, regenerated each run. Fine for a
@@ -71,13 +88,10 @@ func main() {
 	ca, err := identities.CreateSelfSignedCA(caPrivateKey)
 	checkErr(err, "generate self-signed attestation CA")
 
-	// The vault-at-rest key. Derived from the passphrase for now; a later step
-	// seals this to the TPM so the vault only decrypts with chip + face.
-	encryptionKey := sha256.Sum256([]byte(pass))
-
+	encryptionKey := sha256.Sum256([]byte(vaultPass))
 	fidoClient := fido_client.NewDefaultClient(ca, caPrivateKey, encryptionKey, false, client, client)
 
-	fmt.Fprintf(os.Stderr, "[bridge] starting: user=%s pam=%s vault=%s\n", *unixUser, *pamService, *vaultPath)
+	fmt.Fprintf(os.Stderr, "[bridge] starting: user=%s pam=%s vault=%s key=%s\n", *unixUser, *pamService, *vaultPath, mode)
 	runServer(fidoClient)
 }
 

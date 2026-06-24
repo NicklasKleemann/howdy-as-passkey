@@ -2,8 +2,9 @@
 # Install: see scripts/install-service.sh (copies this to
 # ~/.config/systemd/user/, then `systemctl --user enable --now`).
 #
-# Runs as your user - no root. Needs the 'usbip' group active in the session
-# (log out/in once after setup-env.sh), and vhci-hcd loaded at boot.
+# Runs as your user, no root. Needs the 'usbip' and 'tss' groups active in the
+# session (log out/in once after setup-env.sh), and vhci-hcd loaded at boot.
+# 'tss' is only needed when the vault key is sealed to the TPM.
 
 [Unit]
 Description=Howdy passkey bridge (virtual FIDO2 authenticator gated on Howdy face auth)
@@ -13,7 +14,9 @@ After=graphical-session.target
 [Service]
 Type=simple
 # Passphrase comes from an EnvironmentFile (mode 0600), never the command line.
-EnvironmentFile=%h/.config/howdy-passkey-bridge/passphrase.env
+# Optional (the leading '-'): once the vault key is sealed to the TPM, the
+# bridge auto-detects it and no passphrase is needed.
+EnvironmentFile=-%h/.config/howdy-passkey-bridge/passphrase.env
 ExecStart=%h/.local/bin/howdy-bridge --vault %h/.config/howdy-passkey-bridge/vault.json
 Restart=on-failure
 RestartSec=2

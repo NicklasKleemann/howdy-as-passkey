@@ -21,8 +21,11 @@ personal use.
 
 1. **IR liveness** - an IR depth camera defeats photo/screen spoofing that fools
    RGB face auth. This is the single biggest reason this is viable for personal use.
-2. **TPM-sealed keys** - private keys never exist as plaintext on disk. Disk
-   theft or malware cannot clone credentials without the chip + a face match.
+2. **TPM-sealed vault (when present)** - the vault key is sealed to the TPM, so
+   the encrypted vault on disk cannot be decrypted on another machine or without
+   this TPM. Without a TPM the vault falls back to passphrase encryption. Note:
+   keys are decrypted into memory to sign; in-chip signing, where the private key
+   never leaves the TPM, is not yet implemented.
 3. **Fail closed** - any Howdy error/timeout denies. The UV bit is never asserted
    without a real match.
 

@@ -80,15 +80,18 @@ echo "==> [system] Loading vhci-hcd (virtual USB host controller)"
 sudo modprobe vhci-hcd
 echo "vhci-hcd" | sudo tee /etc/modules-load.d/vhci-hcd.conf >/dev/null   # persist across reboot
 
-echo "==> [system] usbip group + udev rule (unprivileged attach, no sudo)"
-# Create the group, add the CURRENT user (never hardcoded), install the udev rule
-# that hands the group write access to the vhci attach/detach controls, and apply
-# it to the already-loaded device so no reboot is needed. Single sudo block.
+echo "==> [system] groups + udev rule (unprivileged attach + TPM access, no sudo)"
+# Add the CURRENT user (never hardcoded) to two groups:
+#   usbip : write access to the vhci attach/detach sysfs controls (via the udev
+#           rule below), so the bridge attaches without sudo.
+#   tss   : access to /dev/tpmrm0, needed only when the vault key is TPM-sealed.
+# Then install the udev rule and apply it to the already-loaded device. One sudo.
 TARGET_USER="$(id -un)"
 sudo bash -c "
 set -e
 getent group usbip >/dev/null || groupadd -r usbip
 usermod -aG usbip '$TARGET_USER'
+getent group tss >/dev/null && usermod -aG tss '$TARGET_USER' || true
 install -m 0644 '$HPB_ROOT/scripts/70-howdy-passkey-vhci.rules' /etc/udev/rules.d/70-howdy-passkey-vhci.rules
 udevadm control --reload
 if [ -d /sys/devices/platform/vhci_hcd.0 ]; then
@@ -96,7 +99,7 @@ if [ -d /sys/devices/platform/vhci_hcd.0 ]; then
     chmod 0660 /sys/devices/platform/vhci_hcd.0/attach /sys/devices/platform/vhci_hcd.0/detach
 fi
 "
-echo "  NOTE: log out and back in (or use 'sg usbip') for the new group to take effect."
+echo "  NOTE: log out and back in for the new groups (usbip, tss) to take effect."
 
 echo "==> [project] Creating local Go cache dirs"
 mkdir -p "$HPB_ROOT/.go" "$HPB_ROOT/bin"
@@ -111,10 +114,15 @@ command -v pamtester >/dev/null && echo "pamtester: present" || echo "pamtester:
     && echo "vhci-hcd: loaded" || echo "vhci-hcd: NOT loaded (check dmesg)"
 test -e /dev/tpmrm0 && echo "tpm: /dev/tpmrm0 present" || echo "tpm: MISSING"
 test -f /etc/pam.d/howdy-only && echo "pam: howdy-only present" || echo "pam: howdy-only MISSING"
-id -nG "$(id -un)" | grep -qw usbip \
-    && echo "group: in 'usbip' (active)" \
-    || echo "group: 'usbip' set but not active in this session yet - re-login or use 'sg usbip'"
+for g in usbip tss; do
+    id -nG "$(id -un)" | grep -qw "$g" \
+        && echo "group $g: active" \
+        || echo "group $g: set but not active in this session yet (re-login)"
+done
 
 echo
-echo "==> Done. Before working in this repo, run:  . scripts/env.sh"
-echo "    Then start the bridge:  ./bin/howdy-bridge --passphrase <pass>"
+echo "==> Done. Next:"
+echo "    1. ./scripts/install-service.sh   (build, install, set up the user service)"
+echo "    2. log out and back in once        (activates the usbip + tss groups)"
+echo "    If this machine has a TPM, install-service.sh seals the vault key to it"
+echo "    automatically; otherwise the vault uses passphrase encryption on disk."

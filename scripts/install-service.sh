@@ -27,14 +27,32 @@ else
     echo "    already exists, leaving it"
 fi
 
+# If this machine has a TPM, seal the vault key to it. The bridge auto-detects
+# the sealed key at runtime; the disk passphrase then becomes a fallback only.
+if [ -e /dev/tpmrm0 ] && [ ! -e "$CONF/vault.key.tpm" ]; then
+    echo "==> TPM detected: sealing the vault key (migrates an existing vault)"
+    # Needs the 'tss' group, which this session may not have yet, so use sg.
+    # Source the passphrase file so the secret never hits the command line.
+    if sg tss -c "set -a; . '$CONF/passphrase.env'; set +a; '$BIN' --tpm-init"; then
+        echo "    vault key sealed to TPM."
+    else
+        echo "    WARN: tpm-init failed (TPM access? wrong passphrase?); the vault will"
+        echo "          use disk-passphrase encryption instead. Re-run later with:"
+        echo "          sg tss -c '$BIN --tpm-init'"
+    fi
+else
+    [ -e "$CONF/vault.key.tpm" ] && echo "==> TPM key already present, skipping seal" \
+        || echo "==> no TPM (/dev/tpmrm0); using disk-passphrase encryption"
+fi
+
 echo "==> installing unit -> $UNIT_DIR/howdy-passkey-bridge.service"
 install -m 0644 "$HPB_ROOT/scripts/howdy-passkey-bridge.service" "$UNIT_DIR/howdy-passkey-bridge.service"
 systemctl --user daemon-reload
 systemctl --user enable howdy-passkey-bridge.service
 
 echo
-echo "==> Enabled. If you just ran setup-env.sh (joined the 'usbip' group),"
-echo "    LOG OUT and back in once so the session picks up the group, then:"
+echo "==> Enabled. If you just ran setup-env.sh (joined the 'usbip' and 'tss' groups),"
+echo "    LOG OUT and back in once so the session picks them up, then:"
 echo "      systemctl --user start howdy-passkey-bridge.service"
 echo "    Check it:  systemctl --user status howdy-passkey-bridge.service"
 echo "               journalctl --user -u howdy-passkey-bridge -f"

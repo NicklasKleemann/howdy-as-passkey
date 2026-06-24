@@ -4,7 +4,7 @@ Use [Howdy](https://github.com/boltgolt/howdy) face authentication as a **passke
 
 Linux has no native platform authenticator, the role Windows Hello and macOS Touch ID fill. This bridges the gap: a virtual FIDO2/CTAP2 authenticator whose user verification step is your Howdy face match.
 
-> **Status:** working. Verified in Chrome on [webauthn.io](https://webauthn.io) and GitHub, doing passkey registration and sign-in with `uv=1`, gated by a live Howdy scan, with no sudo at runtime. This is a personal-use project and is **not security audited** (see [Security](#security)).
+> **Status:** working. Verified in Chrome on [webauthn.io](https://webauthn.io) and GitHub, doing passkey registration and sign-in with `uv=1`, gated by a live Howdy scan, with no sudo at runtime. On a machine with a TPM the vault key is sealed to it (auto-detected). This is a personal-use project and is **not security audited** (see [Security](#security)).
 
 ## How it works
 
@@ -14,7 +14,7 @@ Browser (WebAuthn)
    ▼
 bridge daemon  (runs as your user, no sudo)
    ├─ CTAP2: makeCredential / getAssertion / getInfo
-   ├─ key store ── encrypted file vault  (TPM sealing planned)
+   ├─ key store ── vault key sealed to the TPM (or a disk passphrase)
    └─ user verification ──► Howdy (PAM) ──► face match? yes/no
 ```
 
@@ -51,7 +51,7 @@ You bring these; the setup script does not install them for you:
 
 - **Howdy**, installed and enrolled (`sudo howdy add`). The install is distro specific (see [howdy](https://github.com/boltgolt/howdy)).
 - **An IR depth camera.** RGB-only webcams are photo/screen-spoofable; do not trust this for real accounts without IR liveness.
-- **TPM 2.0** recommended for the planned key-sealing step. Today the keys live in a passphrase-encrypted file vault (see [docs/security.md](docs/security.md)).
+- **TPM 2.0** (optional). If present, `install-service.sh` seals the vault key to it and the bridge auto-detects it at startup; otherwise the vault uses passphrase encryption on disk. See [docs/security.md](docs/security.md).
 - Linux with the `vhci-hcd` kernel module available (mainline; loaded by setup).
 
 ## Testing
@@ -73,7 +73,7 @@ It attaches the authenticator, drives a real `makeCredential` with libfido2, ass
 
 ## Security
 
-Read [docs/security.md](docs/security.md) before trusting this with real accounts. In short: it is built for personal use on a machine with an IR depth camera. It runs unprivileged (no sudo), and the only security gate is the Howdy face check, which fails closed. Keys currently live in a passphrase-encrypted file vault, not yet TPM sealed. It is **not hardware attested and not security reviewed.** Keep a second 2FA method on any account you add it to.
+Read [docs/security.md](docs/security.md) before trusting this with real accounts. In short: it is built for personal use on a machine with an IR depth camera. It runs unprivileged (no sudo), and the only security gate is the Howdy face check, which fails closed. On a machine with a TPM the vault key is sealed to it, so the vault cannot be decrypted on another machine; without a TPM the vault is passphrase-encrypted on disk. Clearing or replacing the TPM loses the vault, so keep the pre-TPM backup the migration writes (`vault.json.pre-tpm.bak`). It is **not hardware attested and not security reviewed.** Keep a second 2FA method on any account you add it to.
 
 ## Built on
 

@@ -166,6 +166,14 @@ Wiring: `fido_client.NewDefaultClient(... approver, saver)` → `virtual_fido.St
    on webauthn.io (USER to eyeball in Chrome - the headless libfido2 path is green).
 6. Security patches: cherry-pick PRs #51/#52/#53/#54; harden remaining panic
    sites. (Done so far: HandleMessage no longer panics on empty/unknown commands.)
-7. TPM: seal-at-rest via `ClientDataSaver.Passphrase()` first; then refactor
-   cose/crypto to `crypto.Signer` for in-chip signing.
-8. systemd user service, attestation none/self option, docs, publish.
+7. TPM seal-at-rest: DONE. A strong random vault passphrase is sealed to the
+   owner-hierarchy SRK via go-tpm (`cmd/howdy-bridge/tpm_linux.go`), stored at
+   `~/.config/howdy-passkey-bridge/vault.key.tpm`. Startup auto-detects: sealed
+   key present means TPM mode, else the disk passphrase. `--tpm-init` migrates an
+   existing vault (verify-decrypt, back up, seal+verify-unseal, re-encrypt
+   atomically). Needs the `tss` group for `/dev/tpmrm0`. Round-trip + corruption
+   test in `tpm_linux_test.go`. Still TODO: in-chip signing (refactor cose/crypto
+   to `crypto.Signer`) so private keys never leave the chip; PCR-bound policy.
+8. systemd user service: DONE. Remaining: attestation none/self option, harden
+   the usbip EOF panic + other panic sites, cherry-pick upstream security PRs,
+   assign own AAGUID, then a wider publish.
