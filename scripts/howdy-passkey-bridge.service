@@ -2,7 +2,7 @@
 # Install: see scripts/install-service.sh (copies this to
 # ~/.config/systemd/user/, then `systemctl --user enable --now`).
 #
-# Runs as your user — no root. Needs the 'usbip' group active in the session
+# Runs as your user - no root. Needs the 'usbip' group active in the session
 # (log out/in once after setup-env.sh), and vhci-hcd loaded at boot.
 
 [Unit]
@@ -18,7 +18,7 @@ ExecStart=%h/.local/bin/howdy-bridge --vault %h/.config/howdy-passkey-bridge/vau
 Restart=on-failure
 RestartSec=2
 # Safe hardening only. Aggressive sandboxing (ProtectSystem/ProtectHome) is
-# deferred — it risks blocking the camera, /etc/howdy, or the vhci sysfs write.
+# deferred - it risks blocking the camera, /etc/howdy, or the vhci sysfs write.
 NoNewPrivileges=true
 
 [Install]

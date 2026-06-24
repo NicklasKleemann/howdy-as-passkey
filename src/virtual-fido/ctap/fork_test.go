@@ -2,7 +2,7 @@ package ctap
 
 // Tests for the howdy-passkey-bridge fork changes to CTAP handling:
 //   - user-verification (UV) flag set on a successful approval (makeCredential
-//     and getAssertion) — the change that justified forking;
+//     and getAssertion) - the change that justified forking;
 //   - GetInfo advertises uv + plat (platform authenticator);
 //   - HandleMessage returns spec errors instead of panicking on empty/unknown
 //     commands.
@@ -95,7 +95,7 @@ func TestMakeCredentialSetsUVFlag(t *testing.T) {
 		t.Error("UP not set")
 	}
 	if flags&flagUV == 0 {
-		t.Errorf("UV not set (flags=0x%02x) — the fork fix regressed", flags)
+		t.Errorf("UV not set (flags=0x%02x) - the fork fix regressed", flags)
 	}
 	if flags&flagAT == 0 {
 		t.Error("attested-credential-data bit not set")

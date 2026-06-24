@@ -98,7 +98,7 @@ func TestVaultRoundTrip(t *testing.T) {
 		t.Fatalf("RetrieveData = %q, want %q", got, payload)
 	}
 
-	// Vault must be written 0600 — never group/world readable.
+	// Vault must be written 0600 - never group/world readable.
 	info, err := os.Stat(c.vaultPath)
 	if err != nil {
 		t.Fatal(err)

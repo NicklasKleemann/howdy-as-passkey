@@ -5,7 +5,7 @@
 # libfido2 and asserts the resulting passkey is user-verified (uv=1), then
 # cryptographically verifies it.
 #
-# REQUIRES (not a CI test — it needs hardware and a live face):
+# REQUIRES (not a CI test - it needs hardware and a live face):
 #   - an IR camera with an enrolled Howdy face,
 #   - the 'usbip' group active in this shell. Run it as:
 #       sg usbip -c scripts/test-e2e.sh
@@ -70,7 +70,7 @@ flags = data[i + 32]
 print("    authData flags = 0x%02x  (UP=%d UV=%d AT=%d)" % (
     flags, bool(flags & 0x01), bool(flags & 0x04), bool(flags & 0x40)))
 if not (flags & 0x04):
-    print("FAIL: UV bit not set — Howdy gate did not mark user-verified"); sys.exit(1)
+    print("FAIL: UV bit not set - Howdy gate did not mark user-verified"); sys.exit(1)
 PY
 
 echo "==> verifying credential (uv required)"

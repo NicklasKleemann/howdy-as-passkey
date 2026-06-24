@@ -2,9 +2,9 @@
 
 Use [Howdy](https://github.com/boltgolt/howdy) face authentication as a **passkey** (WebAuthn/FIDO2) that browsers and apps recognize.
 
-Linux has no native platform authenticator — the role Windows Hello / macOS Touch ID fill. This bridges the gap: a virtual FIDO2/CTAP2 authenticator whose user-verification step is your Howdy face match.
+Linux has no native platform authenticator - the role Windows Hello / macOS Touch ID fill. This bridges the gap: a virtual FIDO2/CTAP2 authenticator whose user-verification step is your Howdy face match.
 
-> **Status:** working. Verified in Chrome on [webauthn.io](https://webauthn.io) and GitHub — passkey registration and sign-in with `uv=1`, gated by a live Howdy scan, no sudo at runtime. Personal-use project, **not security-audited** — see [Security](#security).
+> **Status:** working. Verified in Chrome on [webauthn.io](https://webauthn.io) and GitHub - passkey registration and sign-in with `uv=1`, gated by a live Howdy scan, no sudo at runtime. Personal-use project, **not security-audited** - see [Security](#security).
 
 ## How it works
 
@@ -28,12 +28,12 @@ cd howdy-passkey-bridge
 
 ./scripts/setup-env.sh        # deps, howdy-only PAM stack, usbip group + udev rule, vhci module
 ./scripts/install-service.sh  # build, install to ~/.local/bin, set up the systemd user service
-                              # (prompts for a vault passphrase — remember it; it encrypts your keys)
+                              # (prompts for a vault passphrase - remember it; it encrypts your keys)
 # log out and back in once (activates the 'usbip' group), then:
 systemctl --user start howdy-passkey-bridge.service
 ```
 
-Then register a passkey on any site. In the browser dialog pick the **security key / USB** option (we present over USB transport) — Howdy prompts for your face. The service autostarts on every login thereafter.
+Then register a passkey on any site. In the browser dialog pick the **security key / USB** option (we present over USB transport) - Howdy prompts for your face. The service autostarts on every login thereafter.
 
 Manage it:
 
@@ -49,9 +49,9 @@ Other distros: install the equivalents of the packages listed in `scripts/setup-
 
 You bring these; the setup script does not install them for you:
 
-- **Howdy**, installed and enrolled (`sudo howdy add`). Distro-specific install — see [howdy](https://github.com/boltgolt/howdy).
+- **Howdy**, installed and enrolled (`sudo howdy add`). Distro-specific install - see [howdy](https://github.com/boltgolt/howdy).
 - **An IR depth camera.** RGB-only webcams are photo/screen-spoofable; do not trust this for real accounts without IR liveness.
-- **TPM 2.0** recommended for the planned key-sealing step. Today keys live in a passphrase-encrypted file vault — see [docs/security.md](docs/security.md).
+- **TPM 2.0** recommended for the planned key-sealing step. Today keys live in a passphrase-encrypted file vault - see [docs/security.md](docs/security.md).
 - Linux with the `vhci-hcd` kernel module available (mainline; loaded by setup).
 
 ## Testing
@@ -61,9 +61,9 @@ You bring these; the setup script does not install them for you:
 ( cd src/virtual-fido && go test ./ctap/ ./cmd/howdy-bridge/ )   # unit tests, no hardware
 ```
 
-Unit tests cover the fork's CTAP changes (UV flag on makeCredential/getAssertion, GetInfo advertising uv + platform, graceful errors instead of panics) and the approver (fail-closed PAM logic, action routing, vault round-trip) — with a mocked PAM call, so no camera is needed.
+Unit tests cover the fork's CTAP changes (UV flag on makeCredential/getAssertion, GetInfo advertising uv + platform, graceful errors instead of panics) and the approver (fail-closed PAM logic, action routing, vault round-trip) - with a mocked PAM call, so no camera is needed.
 
-End-to-end (needs the IR camera, an enrolled face, and the `usbip` group active — performs a live scan):
+End-to-end (needs the IR camera, an enrolled face, and the `usbip` group active - performs a live scan):
 
 ```sh
 sg usbip -c scripts/test-e2e.sh
@@ -77,9 +77,9 @@ Read [docs/security.md](docs/security.md) before trusting this with real account
 
 ## Built on
 
-- [bulwarkid/virtual-fido](https://github.com/bulwarkid/virtual-fido) — the CTAP2/U2F + USB/IP authenticator this forks and patches (MIT; license preserved at `src/virtual-fido/LICENSE`). See [DESIGN.md](DESIGN.md) for what the fork changes and why.
-- [Howdy](https://github.com/boltgolt/howdy) — the face-recognition PAM module providing user verification.
+- [bulwarkid/virtual-fido](https://github.com/bulwarkid/virtual-fido) - the CTAP2/U2F + USB/IP authenticator this forks and patches (MIT; license preserved at `src/virtual-fido/LICENSE`). See [DESIGN.md](DESIGN.md) for what the fork changes and why.
+- [Howdy](https://github.com/boltgolt/howdy) - the face-recognition PAM module providing user verification.
 
 ## License
 
-MIT — see [LICENSE](LICENSE). Bundled `src/virtual-fido/` retains its own MIT license (© 2022 BulwarkID).
+MIT - see [LICENSE](LICENSE). Bundled `src/virtual-fido/` retains its own MIT license (© 2022 BulwarkID).

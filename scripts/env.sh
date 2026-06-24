@@ -1,5 +1,5 @@
 # Source this (`. scripts/env.sh`) to scope all Go work to the project.
-# Keeps the module cache, build cache, and installed binaries inside the repo —
+# Keeps the module cache, build cache, and installed binaries inside the repo -
 # nothing leaks to ~/go.
 
 HPB_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." && pwd)"

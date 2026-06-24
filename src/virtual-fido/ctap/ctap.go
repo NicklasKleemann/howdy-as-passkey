@@ -117,7 +117,7 @@ func (server *CTAPServer) HandleMessage(data []byte) []byte {
 		return server.handleClientPIN(data[1:])
 	default:
 		// FORK: unknown/unsupported command (e.g. Reset, GetNextAssertion, or a
-		// client probe like 0x40). Return the spec error instead of panicking —
+		// client probe like 0x40). Return the spec error instead of panicking -
 		// a single unrecognized frame must never take down the authenticator.
 		ctapLogger.Printf("CTAP ERROR: unsupported command 0x%02x\n\n", uint8(command))
 		return []byte{byte(ctap1ErrInvalidCommand)}
@@ -246,7 +246,7 @@ func (server *CTAPServer) handleMakeCredential(data []byte) []byte {
 		ctapLogger.Printf("ERROR: Unapproved action (Create account)")
 		return []byte{byte(ctap2ErrOperationDenied)}
 	}
-	// FORK: approval here is a successful Howdy face match — a biometric, i.e.
+	// FORK: approval here is a successful Howdy face match - a biometric, i.e.
 	// genuine user verification, not mere presence. Set UV as well as UP so
 	// passkey/passwordless relying parties that require uv=1 accept the
 	// credential. (Upstream set only UP, gating UV behind CTAP PIN auth.)
@@ -303,8 +303,8 @@ func (server *CTAPServer) handleGetInfo() []byte {
 		Options: getInfoOptions{
 			// FORK: present as a platform authenticator so browsers route the
 			// seamless "use this device" passkey path here (and trigger Howdy),
-			// instead of the "insert a security key" branch. Mild fiction — the
-			// transport is USB/IP — but the browser only sees CTAP2, and Howdy is
+			// instead of the "insert a security key" branch. Mild fiction - the
+			// transport is USB/IP - but the browser only sees CTAP2, and Howdy is
 			// genuinely a built-in, machine-bound verifier.
 			IsPlatform:          true,
 			CanResidentKey:      server.client.SupportsResidentKey(),

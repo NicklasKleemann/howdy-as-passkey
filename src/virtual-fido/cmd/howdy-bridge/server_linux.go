@@ -17,7 +17,7 @@ import (
 //
 // No sudo: a udev rule (scripts/70-howdy-passkey-vhci.rules) grants the
 // "usbip" group write access to the vhci attach/detach sysfs controls, and the
-// installing user is added to that group. The whole bridge — attach included —
+// installing user is added to that group. The whole bridge - attach included -
 // runs unprivileged. The only security gate is the Howdy face check on each
 // ceremony.
 func runServer(client virtual_fido.FIDOClient) {
@@ -41,7 +41,7 @@ func runServer(client virtual_fido.FIDOClient) {
 			fmt.Fprintf(os.Stderr, "[bridge] usbip attach failed: %s\n", err)
 			fmt.Fprintf(os.Stderr, "[bridge] hint: is the 'usbip' group + udev rule installed, and are you a member? (scripts/setup-env.sh)\n")
 		} else {
-			fmt.Fprintf(os.Stderr, "[bridge] attached — virtual authenticator is live\n")
+			fmt.Fprintf(os.Stderr, "[bridge] attached - virtual authenticator is live\n")
 		}
 	}()
 

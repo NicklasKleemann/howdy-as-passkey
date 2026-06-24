@@ -19,11 +19,11 @@ personal use.
 
 ### What protects you
 
-1. **IR liveness** — an IR depth camera defeats photo/screen spoofing that fools
+1. **IR liveness** - an IR depth camera defeats photo/screen spoofing that fools
    RGB face auth. This is the single biggest reason this is viable for personal use.
-2. **TPM-sealed keys** — private keys never exist as plaintext on disk. Disk
+2. **TPM-sealed keys** - private keys never exist as plaintext on disk. Disk
    theft or malware cannot clone credentials without the chip + a face match.
-3. **Fail closed** — any Howdy error/timeout denies. The UV bit is never asserted
+3. **Fail closed** - any Howdy error/timeout denies. The UV bit is never asserted
    without a real match.
 
 ### What this is NOT
@@ -41,17 +41,17 @@ personal use.
   that assertion must reflect a real, current Howdy match. No caching a "yes".
   Each ceremony runs `pamtester howdy-only <user> authenticate` and fails closed
   on any non-success (non-zero exit, timeout, missing binary).
-- **Least privilege — the daemon runs fully unprivileged, no sudo.** Howdy auth
+- **Least privilege - the daemon runs fully unprivileged, no sudo.** Howdy auth
   works as the user (member of `video`). The one operation that would need root,
   writing the vhci `attach`/`detach` sysfs controls, is granted to a dedicated
   `usbip` group via a udev rule (`scripts/70-howdy-passkey-vhci.rules`); the user
   joins that group. There is no sudoers entry.
   - Residual risk: members of the `usbip` group can attach/detach USB/IP devices
     (e.g. a rogue HID). Keep the group limited to the human user(s) who run the
-    bridge. This is strictly better than the rejected alternative — a NOPASSWD
+    bridge. This is strictly better than the rejected alternative - a NOPASSWD
     sudo rule for `usbip attach *`, whose wildcard let any local code attach an
     arbitrary remote device as root (a privilege-escalation path).
-- **Robustness:** unknown/empty CTAP commands return a spec error, never panic —
+- **Robustness:** unknown/empty CTAP commands return a spec error, never panic -
   a single malformed frame from any process on the USB bus must not crash the
   authenticator. (Upstream panicked; see the fork's ctap.go hardening.)
 - **Glasses caveat:** Howdy enrollment is appearance-sensitive. Keep both
@@ -60,6 +60,6 @@ personal use.
 ## Why NOT TPM-seal sudo
 
 TPM secures *keys*; biometrics produce a *decision* (yes/no). `sudo` auth is a
-boolean PAM gate with no key to release — so there is nothing for the TPM to
+boolean PAM gate with no key to release - so there is nothing for the TPM to
 hold or unlock there. Sealing helps only where a decision releases a key (this
 bridge; LUKS unlock). `sudo` stays plain PAM-Howdy. Sealing it would be theater.

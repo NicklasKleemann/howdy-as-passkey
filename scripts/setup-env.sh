@@ -63,8 +63,8 @@ fi
 
 echo "==> [preflight] Hardware checks (warn-only)"
 [ -e /dev/tpmrm0 ] && echo "  TPM 2.0: present" || \
-    echo "  WARN: no /dev/tpmrm0 — keys will fall back to an encrypted file vault (weaker, see docs/security.md)"
-echo "  NOTE: liveness depends on an IR depth camera. RGB-only webcams are photo/screen-spoofable — do not trust this for real accounts without IR."
+    echo "  WARN: no /dev/tpmrm0 - keys will fall back to an encrypted file vault (weaker, see docs/security.md)"
+echo "  NOTE: liveness depends on an IR depth camera. RGB-only webcams are photo/screen-spoofable - do not trust this for real accounts without IR."
 
 echo "==> [system] Installing toolchain + kernel-facing deps (pacman)"
 # NOTE: Arch/pacman only. On Debian/Ubuntu the equivalents are roughly:
@@ -113,7 +113,7 @@ test -e /dev/tpmrm0 && echo "tpm: /dev/tpmrm0 present" || echo "tpm: MISSING"
 test -f /etc/pam.d/howdy-only && echo "pam: howdy-only present" || echo "pam: howdy-only MISSING"
 id -nG "$(id -un)" | grep -qw usbip \
     && echo "group: in 'usbip' (active)" \
-    || echo "group: 'usbip' set but not active in this session yet — re-login or use 'sg usbip'"
+    || echo "group: 'usbip' set but not active in this session yet - re-login or use 'sg usbip'"
 
 echo
 echo "==> Done. Before working in this repo, run:  . scripts/env.sh"

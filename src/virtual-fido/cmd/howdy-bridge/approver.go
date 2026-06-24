@@ -41,7 +41,7 @@ type HowdyClient struct {
 }
 
 // verify runs the Howdy PAM stack and returns true ONLY on a clean success.
-// Every other outcome — non-zero exit, missing binary, timeout, any error —
+// Every other outcome - non-zero exit, missing binary, timeout, any error -
 // returns false. Fail closed: we never assert verification we did not perform.
 func (c *HowdyClient) verify(reason string) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), howdyVerifyTimeout)
