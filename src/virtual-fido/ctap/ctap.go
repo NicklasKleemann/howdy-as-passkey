@@ -301,7 +301,12 @@ func (server *CTAPServer) handleGetInfo() []byte {
 		Versions: []string{"FIDO_2_0", "U2F_V2"},
 		AAGUID:   aaguid,
 		Options: getInfoOptions{
-			IsPlatform:          false,
+			// FORK: present as a platform authenticator so browsers route the
+			// seamless "use this device" passkey path here (and trigger Howdy),
+			// instead of the "insert a security key" branch. Mild fiction — the
+			// transport is USB/IP — but the browser only sees CTAP2, and Howdy is
+			// genuinely a built-in, machine-bound verifier.
+			IsPlatform:          true,
 			CanResidentKey:      server.client.SupportsResidentKey(),
 			CanUserPresence:     true,
 			CanUserVerification: true, // FORK: Howdy is our configured UV method

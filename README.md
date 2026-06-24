@@ -34,6 +34,28 @@ You bring these; the setup script does not install them for you:
 written for **Arch/pacman**; other distros need the equivalent packages (noted
 in the script).
 
+## Testing
+
+```sh
+. scripts/env.sh
+( cd src/virtual-fido && go test ./ctap/ ./cmd/howdy-bridge/ )   # unit tests (no hardware)
+```
+
+Unit tests cover the fork's CTAP changes (UV flag on makeCredential/getAssertion,
+GetInfo advertising uv + platform, graceful errors instead of panics) and the
+approver (fail-closed PAM logic, action routing, vault round-trip) — all with a
+mocked PAM call, so no camera is needed.
+
+End-to-end (needs the IR camera, an enrolled face, and the `usbip` group active —
+performs a live scan):
+
+```sh
+sg usbip -c scripts/test-e2e.sh
+```
+
+It attaches the authenticator, drives a real `makeCredential` with libfido2,
+asserts the result is `uv=1`, and verifies it.
+
 ## Security
 
 Read [docs/security.md](docs/security.md) before trusting this with real accounts. Short version: built for personal use on a machine with an IR depth camera + TPM 2.0. Not hardware-attested. Not security-reviewed.
