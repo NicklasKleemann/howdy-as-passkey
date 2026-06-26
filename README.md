@@ -8,17 +8,15 @@ Linux has no native platform authenticator, the role Windows Hello and macOS Tou
 
 ## How it works
 
-```
-Browser (WebAuthn)
-   │  CTAP2 over USB-HID (virtual device via USB/IP)
-   ▼
-bridge daemon  (runs as your user, no sudo)
-   ├─ CTAP2: makeCredential / getAssertion / getInfo
-   ├─ key store ── vault key sealed to the TPM (or a disk passphrase)
-   └─ user verification ──► Howdy (PAM) ──► face match? yes/no
+```mermaid
+flowchart LR
+    B[Browser<br/>WebAuthn] -->|CTAP2 over USB/IP| D[bridge daemon<br/>your user, no sudo]
+    D -->|user verification| H[Howdy face match<br/>IR depth camera]
+    H -->|match yes / no| D
+    D -->|keys sealed and signed| T[TPM 2.0]
 ```
 
-The browser runs a normal WebAuthn ceremony and sees a standard USB security key. When it asks for user verification, the daemon runs a Howdy face check (`pamtester howdy-only`). On a match it signs the assertion. It fails closed on any error.
+The browser runs a normal WebAuthn ceremony and sees a standard USB security key. When it asks for user verification, the daemon runs a Howdy face check (`pamtester howdy-only`). On a match it signs the assertion, inside the TPM when one is present. It fails closed on any error. See [docs/security.md](docs/security.md) for the full trust model, the verification ceremony, and key handling, with diagrams.
 
 ## Quickstart (Arch / CachyOS)
 
