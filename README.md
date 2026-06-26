@@ -1,4 +1,4 @@
-# howdy-passkey-bridge
+# howdy-as-passkey
 
 Use [Howdy](https://github.com/boltgolt/howdy) face authentication as a **passkey** (WebAuthn/FIDO2) that browsers and apps recognize.
 
@@ -23,8 +23,8 @@ The browser runs a normal WebAuthn ceremony and sees a standard USB security key
 ## Quickstart (Arch / CachyOS)
 
 ```sh
-git clone https://github.com/NicklasKleemann/howdy-passkey-bridge
-cd howdy-passkey-bridge
+git clone https://github.com/NicklasKleemann/howdy-as-passkey
+cd howdy-as-passkey
 
 ./scripts/setup-env.sh        # deps, howdy-only PAM stack, usbip group + udev rule, vhci module
 ./scripts/install-service.sh  # build, install to ~/.local/bin, set up the systemd user service
@@ -82,7 +82,8 @@ This forks `bulwarkid/virtual-fido` and patches it for Howdy-gated, TPM-backed p
 - **User verification:** sets the WebAuthn UV flag when a ceremony is approved by a Howdy face match (upstream set it only under CTAP PIN auth), and advertises `uv` in GetInfo. Relying parties that require `uv=1` now accept the credential.
 - **Platform authenticator:** presents as a platform authenticator so browsers route the passkey path to it.
 - **TPM:** the vault key is sealed to the TPM, and on a TPM machine credential keys are generated and signed inside the chip, so the private key never leaves it. Without a TPM the keys stay software-backed and the vault uses passphrase encryption.
-- **Robustness:** returns CTAP spec errors instead of panicking on empty or unknown commands.
+- **Robustness:** returns CTAP spec errors instead of panicking on empty or unknown commands. A dropped USB/IP connection (a manual detach, or suspend/resume tearing down the link) ends the handler cleanly and frees the vhci port, rather than spinning on the dead socket as upstream did.
+- **Stays attached:** the daemon attaches the virtual device once at startup, then watches it. If the device drops (suspend/resume is the common case) it re-attaches automatically within a few seconds, so the passkey is back without restarting the service.
 - **Unprivileged:** runs with no sudo. A `usbip` group plus a udev rule grant the vhci attach, and the `tss` group grants TPM access.
 
 ## Built on
