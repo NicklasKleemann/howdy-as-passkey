@@ -72,36 +72,50 @@ func newUSBIPConnection(server *USBIPServer, conn net.Conn) *usbipConnection {
 }
 
 func (conn *usbipConnection) handle() {
+	// Always release the socket when the handler ends. Without this a dropped
+	// connection left the vhci side half-attached (a zombie "unknown host" port
+	// that blocks the next attach).
+	defer conn.conn.Close()
 	for {
-		header := util.ReadBE[usbipControlHeader](conn.conn)
-		usbipLogger.Printf("[CONTROL MESSAGE] %#v\n\n", header)
-		if header.Command == usbipCommandOpReqDevlist {
-			reply := newOpRepDevlist(conn.server.devices)
-			usbipLogger.Printf("[OP_REP_DEVLIST] %#v\n\n", reply)
-			conn.writeResponse(util.ToBE(reply))
-		} else if header.Command == usbipCommandOpReqImport {
-			busIDData := util.Read(conn.conn, 32)
-			busID := util.CStringToString(busIDData)
-			device := conn.server.getDevice(busID)
-			if device == nil {
-				// Device not found
-				reply := opRepImportError(1)
+		// A read failure here means the peer (the kernel vhci side) dropped the
+		// connection on detach/EOF. Stop reading and return instead of letting
+		// the panic spin the loop on a dead socket.
+		if !conn.alive(func() {
+			header := util.ReadBE[usbipControlHeader](conn.conn)
+			usbipLogger.Printf("[CONTROL MESSAGE] %#v\n\n", header)
+			if header.Command == usbipCommandOpReqDevlist {
+				reply := newOpRepDevlist(conn.server.devices)
+				usbipLogger.Printf("[OP_REP_DEVLIST] %#v\n\n", reply)
 				conn.writeResponse(util.ToBE(reply))
-				continue
+			} else if header.Command == usbipCommandOpReqImport {
+				busIDData := util.Read(conn.conn, 32)
+				busID := util.CStringToString(busIDData)
+				device := conn.server.getDevice(busID)
+				if device == nil {
+					// Device not found
+					reply := opRepImportError(1)
+					conn.writeResponse(util.ToBE(reply))
+					return
+				}
+				reply := newOpRepImport(device)
+				usbipLogger.Printf("[OP_REP_IMPORT] %s\n\n", reply)
+				conn.writeResponse(util.ToBE(reply))
+				conn.handleCommands(device)
+			} else {
+				usbipLogger.Printf("Unknown Command Code: %d", header.Command)
 			}
-			reply := newOpRepImport(device)
-			usbipLogger.Printf("[OP_REP_IMPORT] %s\n\n", reply)
-			conn.writeResponse(util.ToBE(reply))
-			conn.handleCommands(device)
-		} else {
-			usbipLogger.Printf("Unknown Command Code: %d", header.Command)
+		}) {
+			return
 		}
 	}
 }
 
 func (conn *usbipConnection) handleCommands(device USBIPDevice) {
 	for {
-		util.Try(func() {
+		// On a dropped connection the read panics; break the loop and return
+		// rather than spinning (the old behavior re-read the dead socket forever,
+		// burning CPU and never freeing the port).
+		if !conn.alive(func() {
 			header := util.ReadBE[usbipMessageHeader](conn.conn)
 			usbipLogger.Printf("[MESSAGE HEADER] %s\n\n", header)
 			if header.Command == usbipCmdSubmit {
@@ -111,10 +125,22 @@ func (conn *usbipConnection) handleCommands(device USBIPDevice) {
 			} else {
 				usbipLogger.Printf("Unsupported Command: %#v\n\n", header)
 			}
-		}, func(err interface{}) {
-			errLogger.Printf("%v", err)
-		})
+		}) {
+			return
+		}
 	}
+}
+
+// alive runs fn and reports whether it completed without a panic. A panic here
+// means a read/write on the connection failed (peer dropped it); the caller
+// must stop looping rather than retry a dead socket.
+func (conn *usbipConnection) alive(fn func()) bool {
+	ok := true
+	util.Try(fn, func(err interface{}) {
+		errLogger.Printf("connection closed, ending handler: %v", err)
+		ok = false
+	})
+	return ok
 }
 
 func (conn *usbipConnection) handleCommandSubmit(device USBIPDevice, header usbipMessageHeader) {
