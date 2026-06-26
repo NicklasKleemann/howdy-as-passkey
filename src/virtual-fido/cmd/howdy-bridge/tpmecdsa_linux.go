@@ -13,8 +13,9 @@ import (
 )
 
 // In-chip ECDSA: generate a P-256 signing key inside the TPM and sign with it,
-// so the private key never leaves the chip. This is the building block for
-// TPM-backed passkeys (phase 1: prove the crypto before the library plumbing).
+// so the private key never leaves the chip. Wired into credential creation and
+// signing through the cose.TPMSign and identities.TPMNewKey hooks (see main.go)
+// when the bridge runs in TPM mode.
 
 func eccSignTemplate() tpm2.TPMTPublic {
 	return tpm2.TPMTPublic{

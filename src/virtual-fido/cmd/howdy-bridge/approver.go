@@ -27,8 +27,9 @@ func runPamtester(ctx context.Context, service, user string) ([]byte, error) {
 // HowdyClient implements both virtual-fido client hooks:
 //   - ClientRequestApprover: every WebAuthn ceremony is gated on a live Howdy
 //     face match (this is the user-verification step).
-//   - ClientDataSaver: the encrypted credential vault, persisted to a file.
-//     (TPM sealing replaces the plain file in a later step.)
+//   - ClientDataSaver: the encrypted credential vault, persisted to a file. The
+//     vault key is sealed to the TPM when one is present (see tpm_linux.go),
+//     otherwise derived from a disk passphrase.
 type HowdyClient struct {
 	pamService string // e.g. "howdy-only"
 	user       string // unix user whose face is enrolled
@@ -93,7 +94,7 @@ func (c *HowdyClient) ApproveClientAction(action fido_client.ClientAction, param
 	return c.verify(reason)
 }
 
-// --- ClientDataSaver: encrypted vault persistence (file-backed for now) ---
+// --- ClientDataSaver: encrypted vault persistence ---
 
 func (c *HowdyClient) SaveData(data []byte) {
 	// 0600: the vault is encrypted, but never world-readable regardless.
