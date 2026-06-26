@@ -5,27 +5,27 @@ accounts.
 
 ## Threat model & comparison to Windows Hello
 
-Windows Hello = two layers. This project copies both:
+Windows Hello has two layers, a biometric and a TPM key-binding. This project
+copies both:
 
 | Layer | Windows Hello | This project |
 |---|---|---|
-| Biometric (the weak, bypassable part) | face/fingerprint, secure path | Howdy + **IR depth camera** |
-| Key binding (the part that holds) | keys in TPM | keys sealed to **TPM 2.0** |
+| Biometric | face/fingerprint | Howdy + **IR depth camera** |
+| Key binding | keys in TPM | keys generated and signed in **TPM 2.0** |
 
-Hello's documented bypasses (e.g. spoofed USB cameras, CVE-2021-34466;
-fingerprint-sensor defeats) all target the *biometric* layer. Its TPM
-key-binding is what actually protects credentials. We match both layers for
-personal use.
+Hello's documented bypasses (spoofed USB cameras, CVE-2021-34466; fingerprint
+defeats) target the biometric layer, not the TPM key-binding. This project
+matches both for personal use.
 
 ### What protects you
 
 1. **IR liveness** - an IR depth camera defeats photo/screen spoofing that fools
-   RGB face auth. This is the single biggest reason this is viable for personal use.
-2. **TPM-sealed vault (when present)** - the vault key is sealed to the TPM, so
-   the encrypted vault on disk cannot be decrypted on another machine or without
-   this TPM. Without a TPM the vault falls back to passphrase encryption. Note:
-   keys are decrypted into memory to sign; in-chip signing, where the private key
-   never leaves the TPM, is not yet implemented.
+   RGB face auth.
+2. **TPM-bound keys (when present)** - in TPM mode the vault key is sealed to the
+   TPM, and each passkey's private key is generated inside the TPM and signs
+   inside it, so the private key never leaves the chip and the vault cannot be
+   decrypted on another machine. Without a TPM, keys are software-backed and the
+   vault uses passphrase encryption.
 3. **Fail closed** - any Howdy error/timeout denies. The UV bit is never asserted
    without a real match.
 
@@ -65,4 +65,4 @@ personal use.
 TPM secures *keys*; biometrics produce a *decision* (yes/no). `sudo` auth is a
 boolean PAM gate with no key to release - so there is nothing for the TPM to
 hold or unlock there. Sealing helps only where a decision releases a key (this
-bridge; LUKS unlock). `sudo` stays plain PAM-Howdy. Sealing it would be theater.
+bridge; LUKS unlock), so `sudo` stays plain PAM-Howdy.
