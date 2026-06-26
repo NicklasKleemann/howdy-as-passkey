@@ -32,9 +32,10 @@ matches both for personal use.
 ### What this is NOT
 
 - **Not hardware-attested.** Howdy's model runs in userspace; there is no secure
-  enclave guarding the camera path. Do not make hardware-attestation claims.
-- **Not security-reviewed.** Personal-use tool. Do not deploy as auth for other
-  people without a real review.
+  enclave guarding the camera path, and the authenticator reports no hardware
+  attestation. Its security is not hardware-backed at the biometric layer.
+- **Not security-reviewed.** A personal-use tool, not suitable as authentication
+  for other people without a real review.
 - **Root is game over.** An attacker with root can rewrite the PAM stack or the
   daemon. TPM sealing defends data-at-rest / offline theft, not a live rooted box.
 
@@ -50,15 +51,15 @@ matches both for personal use.
   `usbip` group via a udev rule (`scripts/70-howdy-passkey-vhci.rules`); the user
   joins that group. There is no sudoers entry.
   - Residual risk: members of the `usbip` group can attach/detach USB/IP devices
-    (e.g. a rogue HID). Keep the group limited to the human user(s) who run the
-    bridge. This is strictly better than the rejected alternative - a NOPASSWD
+    (e.g. a rogue HID), so the group should hold only the human user(s) who run
+    the bridge. This is strictly better than the rejected alternative - a NOPASSWD
     sudo rule for `usbip attach *`, whose wildcard let any local code attach an
     arbitrary remote device as root (a privilege-escalation path).
 - **Robustness:** unknown/empty CTAP commands return a spec error, never panic -
   a single malformed frame from any process on the USB bus must not crash the
   authenticator. (Upstream panicked; see the fork's ctap.go hardening.)
-- **Glasses caveat:** Howdy enrollment is appearance-sensitive. Keep both
-  glasses / no-glasses samples enrolled to avoid lockouts.
+- **Enrollment coverage:** Howdy is appearance-sensitive, so a sample for each
+  regular look (for example with and without glasses) avoids false rejections.
 
 ## Why NOT TPM-seal sudo
 
