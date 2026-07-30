@@ -56,10 +56,10 @@ You bring these; the setup script does not install them for you:
 
 ```sh
 . scripts/env.sh
-( cd src/virtual-fido && go test ./ctap/ ./cmd/howdy-bridge/ )   # unit tests, no hardware
+( cd src/virtual-fido && go test ./ctap/ ./usbip/ ./cmd/howdy-bridge/ )   # unit tests, no hardware
 ```
 
-The unit tests cover the fork's CTAP changes (the UV flag on makeCredential and getAssertion, GetInfo advertising uv and platform, graceful errors instead of panics) and the approver (fail-closed PAM logic, action routing, vault round-trip). They use a mocked PAM call, so no camera is needed.
+The unit tests cover the fork's CTAP changes (the UV flag on makeCredential and getAssertion, GetInfo advertising uv and platform, graceful errors instead of panics), the approver (fail-closed PAM logic, action routing, vault round-trip), the suspend coordinator (detach before the inhibitor is released, re-attach and re-arm on resume, malformed signals ignored), and the USB/IP server (devlist wire encoding, exclusive device claim under concurrency). They use a mocked PAM call, so no camera is needed.
 
 The end-to-end test needs the IR camera, an enrolled face, and the `usbip` group active, and it performs a live scan:
 
@@ -80,8 +80,8 @@ This forks `bulwarkid/virtual-fido` and patches it for Howdy-gated, TPM-backed p
 - **User verification:** sets the WebAuthn UV flag when a ceremony is approved by a Howdy face match (upstream set it only under CTAP PIN auth), and advertises `uv` in GetInfo. Relying parties that require `uv=1` now accept the credential.
 - **Platform authenticator:** presents as a platform authenticator so browsers route the passkey path to it.
 - **TPM:** the vault key is sealed to the TPM, and on a TPM machine credential keys are generated and signed inside the chip, so the private key never leaves it. Without a TPM the keys stay software-backed and the vault uses passphrase encryption.
-- **Robustness:** returns CTAP spec errors instead of panicking on empty or unknown commands. A dropped USB/IP connection (a manual detach, or suspend/resume tearing down the link) ends the handler cleanly and frees the vhci port, rather than spinning on the dead socket as upstream did.
-- **Stays attached:** the daemon attaches the virtual device once at startup, then watches it. If the device drops (suspend/resume is the common case) it re-attaches automatically within a few seconds, so the passkey is back without restarting the service.
+- **Robustness:** returns CTAP spec errors instead of panicking on empty or unknown commands. A dropped USB/IP connection (a manual detach, or suspend/resume tearing down the link) ends the handler cleanly and frees the vhci port, rather than spinning on the dead socket as upstream did. Also fixes some USB/IP server bugs: the device-list reply is encoded correctly, and connections are served concurrently so `usbip list -r` no longer hangs while the authenticator is attached.
+- **Suspend:** the kernel refuses to suspend while a USB/IP device is attached, so an always-attached authenticator stopped the machine sleeping at all — the laptop stayed awake and flattened its battery overnight. The daemon now takes a logind delay inhibitor, detaches as the system goes down, and re-attaches on resume. A watchdog re-attaches within a few seconds if the device drops for any other reason, so the passkey comes back without restarting the service.
 - **Unprivileged:** runs with no sudo. A `usbip` group plus a udev rule grant the vhci attach, and the `tss` group grants TPM access.
 
 ## Built on
