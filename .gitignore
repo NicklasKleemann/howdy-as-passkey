@@ -4,6 +4,12 @@
 *.test
 *.out
 
+# stray binaries from `go build ./cmd/...` without -o, which drops the artifact
+# in the working directory instead of GOBIN (/bin/, ignored above)
+/src/virtual-fido/howdy-bridge
+/src/virtual-fido/demo
+/src/virtual-fido/tools
+
 # Python - project-local venv (uv)
 /.venv/
 
