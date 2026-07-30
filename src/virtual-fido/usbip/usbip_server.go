@@ -14,12 +14,41 @@ var errLogger = util.NewLogger("[ERR] ", util.LogLevelEnabled)
 
 type USBIPServer struct {
 	devices []USBIPDevice
+
+	// Connections are served concurrently, so a device must not be importable
+	// twice: two importers would drive the same HandleMessage /
+	// RemoveWaitingRequest state at once. importMu guards the claim set.
+	importMu sync.Mutex
+	imported map[string]bool
 }
 
 func NewUSBIPServer(devices []USBIPDevice) *USBIPServer {
 	server := new(USBIPServer)
 	server.devices = devices
+	server.imported = make(map[string]bool)
 	return server
+}
+
+// claimDevice reserves a device for a single connection, reporting false if
+// another connection already holds it.
+func (server *USBIPServer) claimDevice(busID string) bool {
+	server.importMu.Lock()
+	defer server.importMu.Unlock()
+	if server.imported == nil {
+		server.imported = make(map[string]bool)
+	}
+	if server.imported[busID] {
+		return false
+	}
+	server.imported[busID] = true
+	return true
+}
+
+// releaseDevice hands a device back once its connection is finished.
+func (server *USBIPServer) releaseDevice(busID string) {
+	server.importMu.Lock()
+	delete(server.imported, busID)
+	server.importMu.Unlock()
 }
 
 func (server *USBIPServer) Start() {
@@ -38,7 +67,13 @@ func (server *USBIPServer) Start() {
 			continue
 		}
 		usbipConn := newUSBIPConnection(server, connection)
-		util.Try(func() {
+		// Serve each connection on its own goroutine. handle() blocks for the
+		// entire lifetime of an imported device, so running it inline pinned the
+		// accept loop: while the authenticator was attached, every other client
+		// sat unaccepted in the TCP backlog forever. That made `usbip list -r`
+		// and `usbip attach` hang instead of failing, which is actively
+		// misleading when diagnosing an unrelated problem.
+		go util.Try(func() {
 			usbipConn.handle()
 		}, func(err interface{}) {
 			errLogger.Printf("%v", err)
@@ -72,9 +107,13 @@ func newUSBIPConnection(server *USBIPServer, conn net.Conn) *usbipConnection {
 }
 
 func (conn *usbipConnection) handle() {
-	// Always release the socket when the handler ends. Without this a dropped
-	// connection left the vhci side half-attached (a zombie "unknown host" port
-	// that blocks the next attach).
+	// Always release the socket when the handler ends, so a detach or a dropped
+	// peer cannot leave the vhci side holding a half-open connection.
+	//
+	// (Note: a port rendering as "unknown host, remote port and remote busid" in
+	// `usbip port` is NOT a symptom of this. That is just usbip failing to read
+	// its bookkeeping file under /run/vhci_hcd, which is root-owned and absent
+	// on a stock system while this bridge runs unprivileged. It is cosmetic.)
 	defer conn.conn.Close()
 	for {
 		// A read failure here means the peer (the kernel vhci side) dropped the
@@ -86,7 +125,9 @@ func (conn *usbipConnection) handle() {
 			if header.Command == usbipCommandOpReqDevlist {
 				reply := newOpRepDevlist(conn.server.devices)
 				usbipLogger.Printf("[OP_REP_DEVLIST] %#v\n\n", reply)
-				conn.writeResponse(util.ToBE(reply))
+				// Not util.ToBE: this reply holds a slice, which
+				// binary.Write cannot encode. See toBytes.
+				conn.writeResponse(reply.toBytes())
 			} else if header.Command == usbipCommandOpReqImport {
 				busIDData := util.Read(conn.conn, 32)
 				busID := util.CStringToString(busIDData)
@@ -97,6 +138,16 @@ func (conn *usbipConnection) handle() {
 					conn.writeResponse(util.ToBE(reply))
 					return
 				}
+				if !conn.server.claimDevice(busID) {
+					// Another connection is already driving this device. Refuse
+					// rather than let two importers race its message state -
+					// possible now that connections are served concurrently.
+					usbipLogger.Printf("Device %s already imported, refusing", busID)
+					reply := opRepImportError(1)
+					conn.writeResponse(util.ToBE(reply))
+					return
+				}
+				defer conn.server.releaseDevice(busID)
 				reply := newOpRepImport(device)
 				usbipLogger.Printf("[OP_REP_IMPORT] %s\n\n", reply)
 				conn.writeResponse(util.ToBE(reply))

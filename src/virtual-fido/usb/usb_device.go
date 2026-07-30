@@ -17,14 +17,14 @@ type USBDeviceDelegate interface {
 }
 
 type USBDevice struct {
-	delegate        USBDeviceDelegate
+	delegate      USBDeviceDelegate
 	requestBuffer *util.RequestBuffer
 }
 
 func NewUSBDevice(delegate USBDeviceDelegate) *USBDevice {
 	device := &USBDevice{
-		delegate:        delegate,
-		requestBuffer:   util.MakeRequestBuffer(),
+		delegate:      delegate,
+		requestBuffer: util.MakeRequestBuffer(),
 	}
 	delegate.SetResponseHandler(func(response []byte) {
 		device.handleResponse(response)
@@ -53,8 +53,9 @@ func (device *USBDevice) DeviceSummary() usbip.USBIPDeviceSummary {
 			BNumInterfaces:      1,
 		},
 		DeviceInterface: usbip.USBIPDeviceInterface{
-			BInterfaceClass:    3,
-			BInterfaceSubclass: 0,
+			BInterfaceClass:    3, // HID
+			BInterfaceSubclass: 0, // no boot interface
+			BInterfaceProtocol: 0, // none; FIDO HID is reached via report descriptors
 			Padding:            0,
 		},
 	}

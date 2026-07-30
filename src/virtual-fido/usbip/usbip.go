@@ -2,6 +2,8 @@ package usbip
 
 import (
 	"fmt"
+
+	"github.com/bulwarkid/virtual-fido/util"
 )
 
 const (
@@ -17,7 +19,7 @@ const (
 
 var usbipDirectionDescriptions = map[usbipDirection]string{
 	usbipDirOut: "usbipDirOut",
-	usbipDirIn: "usbipDirIn",
+	usbipDirIn:  "usbipDirIn",
 }
 
 type usbipControlCommand uint16
@@ -53,9 +55,9 @@ var usbipCommandDescriptions = map[usbipCommand]string{
 }
 
 type usbipControlHeader struct {
-	Version     uint16
+	Version uint16
 	Command usbipControlCommand
-	Status      uint32
+	Status  uint32
 }
 
 func (header *usbipControlHeader) String() string {
@@ -72,6 +74,22 @@ type usbipOpRepDevlist struct {
 	Devices    []USBIPDeviceSummary
 }
 
+// toBytes encodes the reply for the wire.
+//
+// This cannot go through util.ToBE. That wraps binary.Write, which refuses any
+// struct containing a slice ("some values are not fixed-sized") - and ToBE used
+// to discard the error, so the whole devlist reply was silently emitted as zero
+// bytes and every `usbip list -r` hung waiting for a response that never came.
+// The fixed-size parts are encoded individually instead.
+func (reply usbipOpRepDevlist) toBytes() []byte {
+	out := util.ToBE(reply.Header)
+	out = append(out, util.ToBE(reply.NumDevices)...)
+	for _, device := range reply.Devices {
+		out = append(out, util.ToBE(device)...)
+	}
+	return out
+}
+
 func newOpRepDevlist(devices []USBIPDevice) usbipOpRepDevlist {
 	summaries := make([]USBIPDeviceSummary, len(devices))
 	for i := range devices {
@@ -79,9 +97,9 @@ func newOpRepDevlist(devices []USBIPDevice) usbipOpRepDevlist {
 	}
 	return usbipOpRepDevlist{
 		Header: usbipControlHeader{
-			Version:     usbipVersion,
+			Version: usbipVersion,
 			Command: usbipCommandOpRepDevlist,
-			Status:      0,
+			Status:  0,
 		},
 		NumDevices: uint32(len(devices)),
 		Devices:    summaries,
@@ -100,9 +118,9 @@ func (reply usbipOpRepImport) String() string {
 func newOpRepImport(device USBIPDevice) usbipOpRepImport {
 	return usbipOpRepImport{
 		Header: usbipControlHeader{
-			Version:     usbipVersion,
+			Version: usbipVersion,
 			Command: usbipCommandOpRepImport,
-			Status:      0,
+			Status:  0,
 		},
 		Device: device.DeviceSummary().Header,
 	}
@@ -110,9 +128,9 @@ func newOpRepImport(device USBIPDevice) usbipOpRepImport {
 
 func opRepImportError(statusCode uint32) usbipControlHeader {
 	return usbipControlHeader{
-		Version:     usbipVersion,
+		Version: usbipVersion,
 		Command: usbipCommandOpRepImport,
-		Status:      statusCode,
+		Status:  statusCode,
 	}
 }
 
@@ -235,9 +253,14 @@ func (header USBIPDeviceSummaryHeader) String() string {
 		header.BNumInterfaces)
 }
 
+// USBIPDeviceInterface mirrors the kernel's struct usbip_usb_interface, which
+// is four bytes: class, subclass, protocol, padding. BInterfaceProtocol was
+// missing, so every device entry in an OP_REP_DEVLIST reply was a byte short
+// and the client mis-parsed the stream.
 type USBIPDeviceInterface struct {
 	BInterfaceClass    uint8
 	BInterfaceSubclass uint8
+	BInterfaceProtocol uint8
 	Padding            uint8
 }
 
